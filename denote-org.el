@@ -448,7 +448,8 @@ Also see `denote-org-dblock--files'."
                            :sort-by-component nil
                            :reverse-sort nil
                            :id-only nil
-                           :include-date nil))
+                           :include-date nil
+			   :include-signature nil))
   (org-update-dblock))
 
 ;; TODO 2024-12-04: Maybe we can do this for anything that deals with
@@ -480,7 +481,10 @@ Used by `org-dblock-update' with PARAMS provided by the dynamic block."
                                                  denote-excluded-directories-regexp))
          (files (denote-org-dblock--files rx sort reverse not-rx)))
     (when block-name (insert "#+name: " block-name "\n"))
-    (denote-org--insert-links files (plist-get params :id-only) (plist-get params :include-date))
+    (denote-org--insert-links files
+			      (plist-get params :id-only)
+			      (plist-get params :include-date)
+			      (plist-get params :include-signature))
     (join-line))) ; remove trailing empty line
 
 ;;;;; Dynamic block to insert missing links
@@ -507,7 +511,8 @@ Used by `org-dblock-update' with PARAMS provided by the dynamic block."
                            :sort-by-component nil
                            :reverse-sort nil
                            :id-only nil
-                           :include-date nil))
+                           :include-date nil
+			   :include-signature nil))
   (org-update-dblock))
 
 ;;;###autoload
@@ -522,7 +527,10 @@ Used by `org-dblock-update' with PARAMS provided by the dynamic block."
                                                  denote-excluded-directories-regexp))
          (files (denote-org-dblock--files-missing-only rx sort reverse)))
     (when block-name (insert "#+name: " block-name "\n"))
-    (denote-org--insert-links files (plist-get params :id-only) (plist-get params :include-date))
+    (denote-org--insert-links files
+			      (plist-get params :id-only)
+			      (plist-get params :include-date)
+			      (plist-get params :include-signature))
     (join-line))) ; remove trailing empty line
 
 ;;;;; Dynamic block to insert backlinks
@@ -558,29 +566,30 @@ Used by `org-dblock-update' with PARAMS provided by the dynamic block."
                            :reverse-sort nil
                            :id-only nil
                            :this-heading-only nil
-                           :include-date nil))
+                           :include-date nil
+			   :include signature nil))
   (org-update-dblock))
 
-(defun denote-org--insert-links (files &optional id-only include-date)
+(defun denote-org--insert-links (files &optional id-only include-date include-signature)
   "Insert links to FILES.
 With optional ID-ONLY, insert links with the corresponding file's
 identifier as the description.  Otherwise, use the title of the file.
 
 With optional INCLUDE-DATE, append the date of the file in (YYYY-MM-DD)
-format."
+format.
+
+With optional INCLUDE-SIGNATURE, prepend the signature."
   (let ((denote-link-description-format
-         (if include-date
-             ;; TODO 2025-05-21: Consider making this more flexible.
-             ;; The style we have now is what we have had since this
-             ;; feature was first introduced.  But maybe users prefer
-             ;; to have a different format.
-             (lambda (file)
-               (let* ((file-type (denote-filetype-heuristics file))
-                      (title (denote-retrieve-title-or-filename file file-type))
-                      (identifier (denote-retrieve-filename-identifier file))
-                      (date (denote-id-to-date identifier)))
-                 (format "%s (%s)" title date)))
-           denote-link-description-format)))
+         (lambda (file)
+           (let* ((file-type (denote-filetype-heuristics file))
+                  (title (denote-retrieve-title-or-filename file file-type))
+                  (identifier (denote-retrieve-filename-identifier file))
+                  (date (when include-date (denote-id-to-date identifier)))
+                  (signature (when include-signature (denote-retrieve-filename-signature file))))
+             (format "%s%s%s"
+                     (if signature (concat signature " ") "")
+                     title
+                     (if date (format " (%s)" date) ""))))))
     (denote-link--insert-links files 'org id-only :no-other-sorting)))
 
 ;;;###autoload
@@ -595,7 +604,10 @@ Used by `org-dblock-update' with PARAMS provided by the dynamic block."
            (denote-excluded-directories-regexp (or (plist-get params :excluded-dirs-regexp)
                                                    denote-excluded-directories-regexp))
            (files (denote-org-dblock--maybe-sort-backlinks files sort reverse)))
-      (denote-org--insert-links files (plist-get params :id-only) (plist-get params :include-date))
+      (denote-org--insert-links files
+				(plist-get params :id-only)
+				(plist-get params :include-date)
+				(plist-get params :include-signature))
       (join-line)))) ; remove trailing empty line
 
 ;;;;; Dynamic block to insert entire file contents
